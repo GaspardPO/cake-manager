@@ -1,28 +1,32 @@
 package com.waracle.cakemgr;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import org.hibernate.annotations.DynamicUpdate;
+
 import java.io.Serializable;
 
 import javax.persistence.*;
 
 @Entity
-@org.hibernate.annotations.Entity(dynamicUpdate = true)
-@Table(name = "Employee", uniqueConstraints = {@UniqueConstraint(columnNames = "ID"), @UniqueConstraint(columnNames = "EMAIL")})
+@DynamicUpdate
+@Table(name = "Cakes")
 public class CakeEntity implements Serializable {
 
-    private static final long serialVersionUID = -1798070786993154676L;
+    private static final long serialVersionUID = -1321265956240974641L;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "ID", unique = true, nullable = false)
-    private Integer employeeId;
+    @Column(unique = true, nullable = false)
+    private Integer id;
 
-    @Column(name = "EMAIL", unique = true, nullable = false, length = 100)
+    @Column(nullable = false, length = 100)
     private String title;
 
-    @Column(name = "FIRST_NAME", unique = false, nullable = false, length = 100)
+    @Column(nullable = false, length = 100)
+    @JsonProperty("desc")
     private String description;
 
-    @Column(name = "LAST_NAME", unique = false, nullable = false, length = 300)
+    @Column(nullable = false, length = 300)
     private String image;
 
     public String getTitle() {
@@ -48,5 +52,4 @@ public class CakeEntity implements Serializable {
     public void setImage(String image) {
         this.image = image;
     }
-
 }

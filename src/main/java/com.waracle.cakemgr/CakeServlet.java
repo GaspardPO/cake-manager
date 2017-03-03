@@ -1,10 +1,7 @@
 package com.waracle.cakemgr;
 
-import com.fasterxml.jackson.core.JsonFactory;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonToken;
-import org.hibernate.Session;
-import org.hibernate.exception.ConstraintViolationException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -15,8 +12,11 @@ import java.io.*;
 import java.net.URL;
 import java.util.List;
 
-@WebServlet("/cakes")
+@WebServlet({"/cakes", ""})
 public class CakeServlet extends HttpServlet {
+
+    private PersistenceService persistenceService = new PersistenceService();
+    // TODO: 02/03/2017 : Inject ?
 
     @Override
     public void init() throws ServletException {
@@ -24,56 +24,8 @@ public class CakeServlet extends HttpServlet {
 
         System.out.println("init started");
 
-
-        System.out.println("downloading cake json");
-        try (InputStream inputStream = new URL("https://gist.githubusercontent.com/hart88/198f29ec5114a3ec3460/raw/8dd19a88f9b8d24c23d9960f3300d0c917a4f07c/cake.json").openStream()) {
-            BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-
-            StringBuffer buffer = new StringBuffer();
-            String line = reader.readLine();
-            while (line != null) {
-                buffer.append(line);
-                line = reader.readLine();
-            }
-
-            System.out.println("parsing cake json");
-            JsonParser parser = new JsonFactory().createParser(buffer.toString());
-            if (JsonToken.START_ARRAY != parser.nextToken()) {
-                throw new Exception("bad token");
-            }
-
-            JsonToken nextToken = parser.nextToken();
-            while(nextToken == JsonToken.START_OBJECT) {
-                System.out.println("creating cake entity");
-
-                CakeEntity cakeEntity = new CakeEntity();
-                System.out.println(parser.nextFieldName());
-                cakeEntity.setTitle(parser.nextTextValue());
-
-                System.out.println(parser.nextFieldName());
-                cakeEntity.setDescription(parser.nextTextValue());
-
-                System.out.println(parser.nextFieldName());
-                cakeEntity.setImage(parser.nextTextValue());
-
-                Session session = HibernateUtil.getSessionFactory().openSession();
-                try {
-                    session.beginTransaction();
-                    session.persist(cakeEntity);
-                    System.out.println("adding cake entity");
-                    session.getTransaction().commit();
-                } catch (ConstraintViolationException ex) {
-
-                }
-                session.close();
-
-                nextToken = parser.nextToken();
-                System.out.println(nextToken);
-
-                nextToken = parser.nextToken();
-                System.out.println(nextToken);
-            }
-
+        try {
+            initDefaultValues();
         } catch (Exception ex) {
             throw new ServletException(ex);
         }
@@ -81,26 +33,42 @@ public class CakeServlet extends HttpServlet {
         System.out.println("init finished");
     }
 
-    @Override
-    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    private void initDefaultValues() throws IOException {
+        System.out.println("downloading cake json");
 
-        Session session = HibernateUtil.getSessionFactory().openSession();
-        List<CakeEntity> list = session.createCriteria(CakeEntity.class).list();
-
-        resp.getWriter().println("[");
-
-        for (CakeEntity entity : list) {
-            resp.getWriter().println("\t{");
-
-            resp.getWriter().println("\t\t\"title\" : " + entity.getTitle() + ", ");
-            resp.getWriter().println("\t\t\"desc\" : " + entity.getDescription() + ",");
-            resp.getWriter().println("\t\t\"image\" : " + entity.getImage());
-
-            resp.getWriter().println("\t}");
+        try (InputStream inputStream = new URL("https://gist.githubusercontent.com/hart88/198f29ec5114a3ec3460/raw/8dd19a88f9b8d24c23d9960f3300d0c917a4f07c/defaultCakes.json").openStream()) {
+            List<CakeEntity> cakesEntities = new ObjectMapper().readValue(inputStream, new TypeReference<List<CakeEntity>>() {});
+            // TODO: 02/03/2017  : should the duplicates values be removed ?
+            persistenceService.persist(cakesEntities);
         }
-
-        resp.getWriter().println("]");
-
     }
 
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        List<CakeEntity> list = persistenceService.getAllCakes();
+
+        if (request.getHeader("Accept").contains("json")) {
+            new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(response.getWriter(), list);
+        } else {
+            request.setAttribute("cakes", list);
+            this.getServletContext()
+                    .getRequestDispatcher("/index.jsp")
+                    .forward(request, response);
+        }
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        CakeEntity newCake = new CakeEntity();
+        newCake.setTitle(request.getParameter("title"));
+        newCake.setDescription(request.getParameter("description"));
+        newCake.setImage(request.getParameter("image"));
+
+        persistenceService.persist(newCake);
+        response.sendRedirect("");
+    }
+
+    public void changePersistenceService(PersistenceService persistenceService) {
+        this.persistenceService = persistenceService;
+    }
 }
